@@ -1240,7 +1240,9 @@ the nature of skew correction these lengths are set via gcode. See
 Temperature-dependant toolhead Z position adjustment. Compensate for vertical
 toolhead movement caused by thermal expansion of the printer's frame in
 real-time using a temperature sensor (typically coupled to a vertical section
-of frame).
+of frame). Multiple sections may be defined as [z_thermal_adjust component] to
+compensate for thermal expansion in different printer components, such as the
+hotend, heatbreak and frame.
 
 See also: [extended g-code commands](G-Codes.md#z_thermal_adjust).
 
@@ -1262,6 +1264,10 @@ See also: [extended g-code commands](G-Codes.md#z_thermal_adjust).
 #max_z_adjustment:
 #   Maximum absolute adjustment that can be applied to the Z axis [mm]. The
 #   default is 99999999.0 mm (unlimited).
+#sensor:
+#   Name of a single temperature sensor to use as a temperature source. E.g.
+#   'temperature_sensor frame', 'extruder', 'heater_bed' etc. If this option
+#   is used the other sensor options are not used.
 #sensor_type:
 #sensor_pin:
 #min_temp:
@@ -4648,20 +4654,119 @@ adc2:
 ## Load Cells
 
 ### [load_cell]
-Load Cell. Uses an ADC sensor attached to a load cell to create a digital
-scale.
+Load Cell. Uses a bulk ADC sensor attached to a load cell to create a digital
+scale. This enables the [LOAD_CELL gcode commands](G-Codes.md#load_cell).
 
 ```
 [load_cell]
-sensor_type:
-#   This must be one of the supported sensor types, see below.
+sensor_type: hx717
+#   This must be one of the supported bulk ADC sensor types
+#counts_per_gram:
+#   The number of sensor counts that indicates 1 gram of force. This is
+#   calculated by the CALIBRATE_LOAD_CELL command.
+#reference_tare_counts:
+#   This is the tare value, in raw sensor counts, taken when CALIBRATE_LOAD_CELL
+#   is run. This is the default tare value when klipper starts up.
 ```
 
-#### XH711
+### [load_cell_probe]
+Load Cell Probe. This combines the functionality of a [probe] and a [load_cell].
+
+```
+[load_cell_probe]
+sensor_type:
+#   This must be one of the supported bulk ADC sensor types and support
+#   load cell endstops on the mcu.
+#counts_per_gram:
+#reference_tare_counts:
+#   These parameters must be configured before the probe will operate.
+#   See the [load_cell] section for further details.
+#safety_limit: 1000g
+#   The safe limit for probing force relative to the reference_tare_counts on
+#   the load_cell. The default is +/-1Kg.
+#trigger_force: 50.0
+#   The force that the probe will trigger at. 50g is the default.
+#continuous_tare_highpass: 0.8
+#   Enable optional continuous taring while homing & probing to reject drift.
+#   The value is a frequency, in Hz, below which drift will be ignored.This
+#   option requires the SciPy library. Default: None
+#continuous_tare_lowpass: 100.0
+#   The value is a frequency, in Hz, above which high frequency noise in the
+#   load cell will be igfiltered outnored. If this option is set,
+#   continuous_tare_highpass must also be set. Default: None
+#continuous_tare_notch: 50, 60
+#   1 or 2 frequencies, in Hz, to filter out of the load cell data. This is
+#   intended to reject power line noise. If this option is set,
+#   continuous_tare_highpass must also be set. Default: None
+#continuous_tare_notch_quality: 2.0
+#   Controls how narrow the range of frequencies are that the notch filter
+#   removes. Larger numbers produce a narrower filter. Minimum value is 0.5 and
+#   maximum is 3.0. Default: 2.0
+#continuous_tare_trigger_force_grams: 40.0
+#   The force that the probe will trigger at whe using the continuous tearing
+#   filter. 40g is the default.
+#tap_filter_notch: 60.0
+#tap_filter_notch_quality: 2.0
+#   Filters the load cell data before the tap is evaluated. This option may
+#   provide marginal accuracy improvement when notch filtering at the mains
+#   power frequency. Requires SciPy. Default: None
+#trigger_count: 1
+#   The number of samples over the trigger_force_grams threshold that will cause
+#   the probe to trigger. 1 is the default.
+#pullback_dist: 0.1
+#   The distance of the pullback move in mm. This move needs to be long enough
+#   to bring the probe away from the bed after it makes contact.
+#pullback_speed: 0.4
+#   Speed of the pullback move. The default value is to move at a speed of 1
+#   sample every 1 micron based one the sensors sample rate is.
+#settling_time: 0.375
+#   Additional time to wait before taring the probe. This allows any vibrations
+#   to settle and bowden tubes time to flex etc. This improves repeatability.
+#   If the continuous_tare_filter is used this may be set to 0.
+#pullback_extra_time: 0.3
+#   Time to collect additional samples after the pullback move ends in seconds.
+#   This improves accuracy by giving the algorithm more points after the probe
+#   breaks contact with the bed. Disabling this entirely may impact reliability.
+#tare_samples: 16
+#   The number of samples to use when automatically taring the load_cell before
+#   each probe. The default value is: sample_per_second * (1 / 60) * 4. This
+#   collects samples from 4 cycles of 60Hz mains power to cancel power line
+#   noise.
+#bad_tap_module:
+#   Name of a printer object that implements the BadTapModule interface. This
+#   checks taps to see if they meet minimum requirements and can
+#nozzle_cleaner_module:
+#   Name of a printer object that implements the NozzleCleanerModule interface
+#   than can handle nozzle cleaning. If one is provided the nozzle_cleaner_gcode
+#   is disabled.
+#nozzle_cleaner_gcode:
+#   A Gcode macro that is called when a bad tap is detected and the nozzle needs
+#   to be cleaned. The default Gcode prints a warning to the console.
+z_offset:
+#speed:
+#samples:
+#sample_retract_dist:
+#lift_speed:
+#samples_result:
+#samples_tolerance:
+#samples_tolerance_retries:
+#activate_gcode:
+#deactivate_gcode:
+#   See the "[probe]" section for a description of the above parameters.
+```
+
+## Bulk ADC Sensors
+
+Klipper includes support for generic Analog to Digital Converter (ADC) chips
+that can sample at a high data rate. These sensors measure a voltage that can be
+converted into various measurements (temperature, force etc.) by other modules.
+These sensors may be used in any config section that accepts a Bulk ADC (such as
+a `[load_cell]`).
+
+### XH711
 This is a 24 bit low sample rate chip using "bit-bang" communications. It is
 suitable for filament scales.
 ```
-[load_cell]
 sensor_type: hx711
 sclk_pin:
 #   The pin connected to the HX711 clock line. This parameter must be provided.
@@ -4679,10 +4784,9 @@ dout_pin:
 #   in software.
 ```
 
-#### HX717
+### HX717
 This is the 4x higher sample rate version of the HX711, suitable for probing.
 ```
-[load_cell]
 sensor_type: hx717
 sclk_pin:
 #   The pin connected to the HX717 clock line. This parameter must be provided.
@@ -4700,11 +4804,10 @@ dout_pin:
 #   in software.
 ```
 
-#### ADS1220
+### ADS1220
 The ADS1220 is a 24 bit ADC supporting up to a 2Khz sample rate configurable in
 software.
 ```
-[load_cell]
 sensor_type: ads1220
 cs_pin:
 #   The pin connected to the ADS1220 chip select line. This parameter must
@@ -4712,7 +4815,7 @@ cs_pin:
 #spi_speed: 512000
 #   This chip supports 2 speeds: 256000 or 512000. The faster speed is only
 #   enabled when one of the Turbo sample rates is used. The correct spi_speed
-#   is selected based on the sample rate.
+#   is selected based on the sample rate. 
 #spi_bus:
 #spi_software_sclk_pin:
 #spi_software_mosi_pin:
@@ -4728,10 +4831,10 @@ data_ready_pin:
 #sample_rate: 660
 #   This chip supports two ranges of sample rates, Normal and Turbo. In turbo
 #   mode the chips c internal clock runs twice as fast and the SPI communication
-#   speed is also doubled.
+#   speed is also doubled. 
 #   Normal sample rates: 20, 45, 90, 175, 330, 600, 1000
 #   Turbo sample rates: 40, 90, 180, 350, 660, 1200, 2000
-#   The default is 660
+#   The default is `660`
 ```
 
 ## Board specific hardware support

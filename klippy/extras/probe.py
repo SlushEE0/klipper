@@ -13,7 +13,6 @@ consider reducing the Z axis minimum position so the probe
 can travel further (the Z minimum position can be negative).
 """
 
-# Calculate the average Z from a set of positions
 def calc_probe_z_average(positions, method='average'):
     if method != 'median':
         # Use mean average
@@ -173,7 +172,8 @@ class ProbeCommandHelper:
         configfile.set(self.name, 'z_offset', "%.3f" % (new_calibrate,))
 
 # Homing via probe:z_virtual_endstop
-class HomingViaProbeHelper:
+
+class PrinterProbe(object):
     def __init__(self, config, mcu_probe):
         self.printer = config.get_printer()
         self.mcu_probe = mcu_probe
@@ -244,7 +244,7 @@ class ProbeSessionHelper:
             pconfig = config.getsection('printer')
             self.z_position = pconfig.getfloat('minimum_z_position', 0.,
                                                note_valid=False)
-        self.homing_helper = HomingViaProbeHelper(config, mcu_probe)
+        self.homing_helper = PrinterProbe(config, mcu_probe)
         # Configurable probing speeds
         self.speed = config.getfloat('speed', 5.0, above=0.)
         self.lift_speed = config.getfloat('lift_speed', self.speed, above=0.)
